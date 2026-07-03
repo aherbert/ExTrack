@@ -5,6 +5,7 @@ for a non-linear least squares fit to a log-likelihood fit."""
 import warnings
 import numpy as np
 from scipy.linalg import LinAlgError, inv
+from scipy.differentiate import hessian
 
 # check for numdifftools
 try:
@@ -26,10 +27,9 @@ Args:
     fcn: User function. This function must have the signature::
         fcn(result.params, *args)
     args: Optional positional arguments to pass to `fcn`.
+    kwargs: Keyword options to the function computing the Hessian.
 """
-def compute_uncertainties(result, fcn, args=None):
-    if not HAS_NUMDIFFTOOLS:
-        return
+def compute_uncertainties(result, fcn, args=None, **kwargs):
     if args is None:
       args = []
 
@@ -43,7 +43,7 @@ def compute_uncertainties(result, fcn, args=None):
     # Extract the parameters to an array
     x = np.array([result.params[name].value for name in result.var_names])
 
-    covar = _calculate_covariance_matrix(fun, x)
+    covar = _calculate_covariance_matrix(fun, x, **kwargs)
     result.covar = covar
 
     # restore original values
@@ -76,42 +76,80 @@ def compute_uncertainties(result, fcn, args=None):
                     except ZeroDivisionError:
                         result.errorbars = False
         if result.errorbars:
-            if result.uvars is not None:
-              print('Parameters:\n' +
-                '\n'.join(f'  {k}={repr(v)}' for k, v in result.uvars.items()))
-
             result.uvars = result.params.create_uvars(covar=result.covar)
 
 
-def _calculate_covariance_matrix(fun, x):
+def _calculate_covariance_matrix(fun, x, step=1e-4, rel_step=False, num_steps=1, dd_method=0, order=8, maxiter=10, rtol=None):
     """Calculate the covariance matrix.
 
-    The ``numdiftoools`` package is used to estimate the Hessian
+    Use a numerical estimation of the Hessian
     matrix, and the covariance matrix is calculated as the inverse
     of the Hessian. This is valid for log-likelihood functions.
 
     Args:
         fun: Function accepting an array of parameters.
         x: Parameters.
+        step: Step for the numerical differentiation.
+        rel_step: Use relative step size.
+        num_steps: Number of steps for differentiation.
+        dd_method: 0: numdifftools; 1: scipy.differentiate.hessian.
+        order: order of the finite difference formula to be used (scipy hessian).
+        maxiter: maximum iterations (scipy hessian).
+        rtol: relative tolerance (scipy hessian).
 
     Returns:
         Covariance matrix if successful, otherwise None.
     """
-    # Adapted from lmfit.minimizer.Minimizer._calculate_covariance_matrix
-    # Changes have been made to accept the function to estimate (which was
-    # originally a member of the Minimizer class).
-    warnings.filterwarnings(action="ignore", module="scipy",
-                            message="^internal gelsd")
+    if dd_method == 1:
+        # use scipy.differentiate.hessian
+        print(f"_calculate_covariance_matrix: {x}. {step} rel={rel_step} order={order} maxiter={maxiter} rtol={rtol}")
+        # vectorized for fun(x_m) to f(m, ...) -> (...)
+        def f(y):
+            s = y.shape
+            # Iterate over arrays of size m
+            y = y.T.reshape((-1, s[0]))
+            print(s, y.shape, s[1:])
+            a = np.array([fun(yy) for yy in y])
+            aa = a.reshape(tuple(reversed(s))[0:-1]).T
+            print('=', aa.shape)
+            return aa
+        # This can result is a broadcast error
+        if rel_step:
+            step = step*x
+        tolerances = {}
+        if rtol is not None:
+            tolerances['rtol'] = rtol
+        res = hessian(f, x, initial_step=step, order=order, maxiter=maxiter, tolerances=tolerances)
+        if not np.all(res.success):
+            print(list(res.status))
+            print(list(res.ddf))
+            print(list(res.error))
+        h = res.ddf
+    else:
+        # use numdifftools
+        if not HAS_NUMDIFFTOOLS:
+            return None
+
+        # Adapted from lmfit.minimizer.Minimizer._calculate_covariance_matrix
+        # Changes have been made to accept the function to estimate (which was
+        # originally a member of the Minimizer class).
+        warnings.filterwarnings(action="ignore", module="scipy",
+                                message="^internal gelsd")
+
+        print(f"_calculate_covariance_matrix: {x}. {step} rel={rel_step} num={num_steps}")
+        if rel_step:
+            step = step*x
+        Hfun = ndt.Hessian(fun, step=ndt.step_generators.MaxStepGenerator(base_step=step, num_steps=num_steps))
+        h = Hfun(x)
 
     try:
-        Hfun = ndt.Hessian(fun, step=1.e-4)
-        hessian_ndt = Hfun(x)
-        cov_x = inv(hessian_ndt)
-
+        cov_x = inv(h)
         if cov_x.diagonal().min() < 0:
+            print(f"bad covar: {cov_x.diagonal()}")
             # we know the calculated covariance is incorrect, so we set the covariance to None
             cov_x = None
     except (LinAlgError, ValueError):
+        print("bad hessian^-1")
         cov_x = None
 
     return cov_x

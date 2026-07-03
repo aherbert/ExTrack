@@ -29,6 +29,8 @@ from scipy import linalg
 import itertools
 import scipy
 from lmfit import minimize, Parameters
+from lmfit.minimizer import MinimizerResult
+
 
 import multiprocessing
 try:
@@ -1392,3 +1394,98 @@ def param_fitting(all_tracks,
         corr_params['p' + i + j][3] = val
     '''
     return fit
+
+
+def param_vars(all_tracks,
+                  dt,
+                  params = None,
+                  nb_states = 2,
+                  nb_substeps = 1,
+                  frame_len = 6,
+                  verbose = 1,
+                  workers = 1,
+                  Matrix_type = 1,
+                  steady_state = False,
+                  cell_dims = [1], # list of dimensions limit for the field of view (FOV) of the cell in um, a membrane protein in a typical e-coli cell in tirf would have a cell_dims = [0.5,3], in case of cytosolic protein one should imput the depth of the FOV e.g. [0.3] for tirf or [0.8] for hilo
+                  input_LocErr = None,
+                  threshold = 0.2,
+                  max_nb_states = 120,
+                  **kwargs):
+
+    '''
+    Compute parameter variations by inversion of the Hessian matrix.
+    The Hessian is computed numercially.
+
+    This is duplicate of method `param_fitting` without performing a minimization.
+    If the function is not at a minimum the inversion of the Hessian will not create
+    a positive-definite matrix and the result will be None.
+
+    arguments:
+    all_tracks: Dictionary describing the tracks with track length as keys (number of time positions, e.g. '23') of 3D arrays: dim 0 = track, dim 1 = time position, dim 2 = x, y position. This means 15 tracks of 7 time points in 2D will correspond to an array of shape [15,7,2].
+    dt: Time in between frames.
+    params: Parameters previously instanciated.
+    nb_states: Number of states. vary_params, estimated_vals, min_values, max_values should be changed accordingly to describe all states and transitions.
+    nb_substeps: Number of considered transition steps in between consecutive 2 positions.
+    frame_len: Number of frames for which the probability is perfectly computed. See method of the paper for more details.
+    verbose: If 1, print the intermediate values for each iteration of the fit.
+    steady_state: True if tracks are considered at steady state (fractions independent of time), this is most likely not true as tracks join and leave the FOV.
+    workers: Number of workers used for the fitting, allows to speed up computation. Do not work from windows at the moment.
+    input_LocErr: Optional peakwise localization errors used as an input with the same format than all_tracks.
+    cell_dims: Dimension limits (um) (default [1], can also be [1,2] for instance in case of two limiting dimensions).
+    threshold: threshold for the fusion of the sequences of states (default value = 0.2). The threshold is applied to mu the mean position and s the standard deviation of the particle position (see the article for more details).
+    max_nb_states: maximum number of sequences of states to consider.
+    kwargs: keyword options to pass to the function computing the Hessian.
+
+    outputs:
+    uvars: Uncertain variables (ufloat array), or None
+    '''
+
+    if params == None:
+        params = generate_params(nb_states = nb_states,
+                               LocErr_type = 1,
+                               LocErr_bounds = [0.005, 0.1], # the initial guess on LocErr will be the geometric mean of the boundaries
+                               D_max = 3, # maximal diffusion length allowed
+                               Fractions_bounds = [0.001, 0.99],
+                               estimated_transition_rates = 0.1 # transition rate per step.
+                               )
+
+    l_list = np.sort(np.array(list(all_tracks.keys())).astype(int)).astype(str)
+    sorted_tracks = []
+    sorted_LocErrs = []
+    if type(dt) == dict:
+        sorted_dt = []
+    for l in l_list:
+        if len(all_tracks[l]) > 0 :
+            sorted_tracks.append((all_tracks[l]))
+            if input_LocErr != None:
+                sorted_LocErrs.append(input_LocErr[l])
+            if type(dt) == dict:
+                sorted_dt.append(dt[l])
+
+    all_tracks = sorted_tracks
+    if len(all_tracks) < 1:
+        raise ValueError('No track could be detected. The loaded tracks seem empty. Errors often come from wrong input paths.')
+
+    if input_LocErr != None:
+        input_LocErr = sorted_LocErrs
+
+    if type(dt) == dict:
+        dt = sorted_dt
+
+    print('cell_dims', cell_dims)
+
+    fun_args = (all_tracks, dt, cell_dims,input_LocErr, nb_states, nb_substeps, frame_len, verbose, workers, Matrix_type, threshold, max_nb_states)
+
+    # Create dummy fit result
+    fit = MinimizerResult()
+    fit.params = params
+    fit.var_names = []
+    for name, par in params.items():
+        if par.expr is not None:
+            par.vary = False
+        if par.vary:
+            fit.var_names.append(name)
+
+    fit.uvars = None
+    compute_uncertainties(fit, cum_Proba_Cs, args=fun_args, **kwargs)
+    return fit.uvars
