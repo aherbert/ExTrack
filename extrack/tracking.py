@@ -1487,5 +1487,6 @@ def param_vars(all_tracks,
             fit.var_names.append(name)
 
     fit.uvars = None
+    kwargs['verbose'] = verbose
     compute_uncertainties(fit, cum_Proba_Cs, args=fun_args, **kwargs)
     return fit.uvars

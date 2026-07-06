@@ -79,7 +79,8 @@ def compute_uncertainties(result, fcn, args=None, **kwargs):
             result.uvars = result.params.create_uvars(covar=result.covar)
 
 
-def _calculate_covariance_matrix(fun, x, step=1e-4, rel_step=False, num_steps=1, dd_method=0, order=8, maxiter=10, rtol=None):
+def _calculate_covariance_matrix(fun, x, step=1e-4, rel_step=False, num_steps=1,
+    dd_method=0, order=8, maxiter=10, rtol=None, verbose=0):
     """Calculate the covariance matrix.
 
     Use a numerical estimation of the Hessian
@@ -96,34 +97,43 @@ def _calculate_covariance_matrix(fun, x, step=1e-4, rel_step=False, num_steps=1,
         order: order of the finite difference formula to be used (scipy hessian).
         maxiter: maximum iterations (scipy hessian).
         rtol: relative tolerance (scipy hessian).
+        verbose: Verbosity.
 
     Returns:
         Covariance matrix if successful, otherwise None.
     """
     if dd_method == 1:
         # use scipy.differentiate.hessian
-        print(f"_calculate_covariance_matrix: {x}. {step} rel={rel_step} order={order} maxiter={maxiter} rtol={rtol}")
+        print(f"calculate_covariance_matrix: {x}. {step} rel={rel_step} order={order} maxiter={maxiter} rtol={rtol}")
+        # The function is repeatedly called with the same array value
+        # so cache the results.
+        cache = {}
+        def ff(x):
+            b = x.tobytes()
+            if (v := cache.get(b)) is not None:
+                return v
+            v = fun(x)
+            cache[b] = v
+            return v
         # vectorized for fun(x_m) to f(m, ...) -> (...)
         def f(y):
             s = y.shape
             # Iterate over arrays of size m
             y = y.T.reshape((-1, s[0]))
-            print(s, y.shape, s[1:])
-            a = np.array([fun(yy) for yy in y])
-            aa = a.reshape(tuple(reversed(s))[0:-1]).T
-            print('=', aa.shape)
-            return aa
-        # This can result is a broadcast error
+            a = np.array([ff(yy) for yy in y])
+            return a.reshape(tuple(reversed(s))[0:-1]).T
+        # XXX: This can result in a broadcast error.
+        # It is a bug in scipy.
         if rel_step:
             step = step*x
         tolerances = {}
         if rtol is not None:
             tolerances['rtol'] = rtol
         res = hessian(f, x, initial_step=step, order=order, maxiter=maxiter, tolerances=tolerances)
-        if not np.all(res.success):
-            print(list(res.status))
-            print(list(res.ddf))
-            print(list(res.error))
+        if verbose or not np.all(res.success):
+            print('status', list(res.status))
+            print('hessian', list(res.ddf))
+            print('error', list(res.error))
         h = res.ddf
     else:
         # use numdifftools
@@ -136,7 +146,7 @@ def _calculate_covariance_matrix(fun, x, step=1e-4, rel_step=False, num_steps=1,
         warnings.filterwarnings(action="ignore", module="scipy",
                                 message="^internal gelsd")
 
-        print(f"_calculate_covariance_matrix: {x}. {step} rel={rel_step} num={num_steps}")
+        print(f"calculate_covariance_matrix: {x}. {step} rel={rel_step} num={num_steps}")
         if rel_step:
             step = step*x
         Hfun = ndt.Hessian(fun, step=ndt.step_generators.MaxStepGenerator(base_step=step, num_steps=num_steps))
@@ -145,11 +155,11 @@ def _calculate_covariance_matrix(fun, x, step=1e-4, rel_step=False, num_steps=1,
     try:
         cov_x = inv(h)
         if cov_x.diagonal().min() < 0:
-            print(f"bad covar: {cov_x.diagonal()}")
+            print(f"bad covariance: {cov_x.diagonal()}")
             # we know the calculated covariance is incorrect, so we set the covariance to None
             cov_x = None
-    except (LinAlgError, ValueError):
-        print("bad hessian^-1")
+    except (LinAlgError, ValueError) as e:
+        print("bad hessian^-1", e)
         cov_x = None
 
     return cov_x
