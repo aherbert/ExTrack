@@ -80,7 +80,7 @@ def compute_uncertainties(result, fcn, args=None, **kwargs):
 
 
 def _calculate_covariance_matrix(fun, x, step=1e-4, rel_step=False, num_steps=1,
-    dd_method=0, order=8, maxiter=10, rtol=None, verbose=0):
+    dd_method=0, order=8, maxiter=10, rtol=None, verbose=0, forward=False):
     """Calculate the covariance matrix.
 
     Use a numerical estimation of the Hessian
@@ -98,6 +98,7 @@ def _calculate_covariance_matrix(fun, x, step=1e-4, rel_step=False, num_steps=1,
         maxiter: maximum iterations (scipy hessian).
         rtol: relative tolerance (scipy hessian).
         verbose: Verbosity.
+        forward: Use forward differences; default is central (numdifftools).
 
     Returns:
         Covariance matrix if successful, otherwise None.
@@ -146,10 +147,13 @@ def _calculate_covariance_matrix(fun, x, step=1e-4, rel_step=False, num_steps=1,
         warnings.filterwarnings(action="ignore", module="scipy",
                                 message="^internal gelsd")
 
-        print(f"calculate_covariance_matrix: {x}. {step} rel={rel_step} num={num_steps}")
+        print(f"calculate_covariance_matrix: {x}. {step} rel={rel_step} num={num_steps} forward={forward}")
         if rel_step:
             step = step*x
-        Hfun = ndt.Hessian(fun, step=ndt.step_generators.MaxStepGenerator(base_step=step, num_steps=num_steps))
+        method = 'forward' if forward else 'central'
+        Hfun = ndt.Hessian(fun,
+          step=ndt.step_generators.MaxStepGenerator(base_step=step, num_steps=num_steps),
+          method=method)
         h = Hfun(x)
 
     try:
