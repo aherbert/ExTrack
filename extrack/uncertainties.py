@@ -36,6 +36,7 @@ def compute_uncertainties(result, fcn, args=None, **kwargs):
     # Wrap the input function to f(x) for computation of the covariance.
     # Store the min of the negative log-likelihood function.
     minv = np.inf
+    optv = np.inf
     xx = np.array([])
     def fun(x):
         # copy x values to the params
@@ -43,7 +44,11 @@ def compute_uncertainties(result, fcn, args=None, **kwargs):
             result.params[name].value = float(val)
         v = np.sum(fcn(result.params, *args))
         nonlocal minv
+        nonlocal optv
         nonlocal xx
+        # Store optimal value from first evaluation
+        if optv == np.inf:
+            optv = v
         if minv > v:
             minv = v
             xx = x
@@ -61,7 +66,9 @@ def compute_uncertainties(result, fcn, args=None, **kwargs):
 
     # warn for non-optimal value
     if not np.array_equal(x, xx):
-        print(f"WARNING: computing uncertainties of non-optimal log likelihood function: {-minv} @ {' '.join([str(v) for v in xx])}")
+        print(f"WARNING: computing uncertainties of non-optimal log likelihood function: {-optv} -> {-minv}")
+        for i, name in enumerate(result.var_names):
+            print(f"  {name}={xx[i]}{' ***' if x[i] != xx[i] else ''}")
 
     if covar is not None:
         # Adapted from lmfit.minimizer.Minimizer._calculate_uncertainties_correlations
