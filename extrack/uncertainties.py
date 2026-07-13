@@ -15,7 +15,7 @@ except ImportError:
     HAS_NUMDIFFTOOLS = False
 
 """
-Compute the parameter uncertainties of the log-likelihood function.
+Compute the parameter uncertainties of the minimised negative log-likelihood function.
 
 The covariance matrix is calculated as the inverse of a numerically
 approximated Hessian. The covariance is used to create the
@@ -31,14 +31,23 @@ Args:
 """
 def compute_uncertainties(result, fcn, args=None, **kwargs):
     if args is None:
-      args = []
+        args = []
 
-    # Wrap the input function to f(x) for computation of the covariance
+    # Wrap the input function to f(x) for computation of the covariance.
+    # Store the min of the negative log-likelihood function.
+    minv = np.inf
+    xx = np.array([])
     def fun(x):
         # copy x values to the params
         for name, val in zip(result.var_names, x):
             result.params[name].value = float(val)
-        return np.sum(fcn(result.params, *args))
+        v = np.sum(fcn(result.params, *args))
+        nonlocal minv
+        nonlocal xx
+        if minv > v:
+            minv = v
+            xx = x
+        return v
 
     # Extract the parameters to an array
     x = np.array([result.params[name].value for name in result.var_names])
@@ -49,6 +58,10 @@ def compute_uncertainties(result, fcn, args=None, **kwargs):
     # restore original values
     for i, name in enumerate(result.var_names):
         result.params[name].value = float(x[i])
+
+    # warn for non-optimal value
+    if not np.array_equal(x, xx):
+        print(f"WARNING: computing uncertainties of non-optimal log likelihood function: {-minv} @ {' '.join([str(v) for v in xx])}")
 
     if covar is not None:
         # Adapted from lmfit.minimizer.Minimizer._calculate_uncertainties_correlations
