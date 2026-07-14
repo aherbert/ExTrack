@@ -27,9 +27,11 @@ Args:
     fcn: User function. This function must have the signature::
         fcn(result.params, *args)
     args: Optional positional arguments to pass to `fcn`.
+    cb: User callback function invoked when gradient estimation discovered a new optimum.
+        This function must have the signature: cb(params, log_likelihood).
     kwargs: Keyword options to the function computing the Hessian.
 """
-def compute_uncertainties(result, fcn, args=None, **kwargs):
+def compute_uncertainties(result, fcn, args=None, cb=None, **kwargs):
     if args is None:
         args = []
 
@@ -60,10 +62,6 @@ def compute_uncertainties(result, fcn, args=None, **kwargs):
     covar = _calculate_covariance_matrix(fun, x, **kwargs)
     result.covar = covar
 
-    # restore original values
-    for i, name in enumerate(result.var_names):
-        result.params[name].value = float(x[i])
-
     # warn for non-optimal value
     if not np.array_equal(x, xx):
         print(f"WARNING: computing uncertainties of non-optimal log likelihood function: {-optv} -> {-minv}")
@@ -73,6 +71,15 @@ def compute_uncertainties(result, fcn, args=None, **kwargs):
                 print(f"  {name}={xx[i]} *** {dx}  ({(dx / x[i])})")
             else:
                 print(f"  {name}={xx[i]}")
+        if cb is not None:
+            # Populate values
+            for i, name in enumerate(result.var_names):
+                result.params[name].value = float(xx[i])
+            cb(result.params, -minv)
+
+    # restore original values
+    for i, name in enumerate(result.var_names):
+        result.params[name].value = float(x[i])
 
     if covar is not None:
         # Adapted from lmfit.minimizer.Minimizer._calculate_uncertainties_correlations

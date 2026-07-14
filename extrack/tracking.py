@@ -1410,6 +1410,7 @@ def param_vars(all_tracks,
                   input_LocErr = None,
                   threshold = 0.2,
                   max_nb_states = 120,
+                  cb=None,
                   **kwargs):
 
     '''
@@ -1434,6 +1435,8 @@ def param_vars(all_tracks,
     cell_dims: Dimension limits (um) (default [1], can also be [1,2] for instance in case of two limiting dimensions).
     threshold: threshold for the fusion of the sequences of states (default value = 0.2). The threshold is applied to mu the mean position and s the standard deviation of the particle position (see the article for more details).
     max_nb_states: maximum number of sequences of states to consider.
+    cb: User callback function invoked when gradient estimation discovered a new optimum.
+        This function must have the signature: cb(params, log_likelihood).
     kwargs: keyword options to pass to the function computing the Hessian.
 
     outputs:
@@ -1488,5 +1491,5 @@ def param_vars(all_tracks,
 
     fit.uvars = None
     kwargs['verbose'] = verbose
-    compute_uncertainties(fit, cum_Proba_Cs, args=fun_args, **kwargs)
+    compute_uncertainties(fit, cum_Proba_Cs, args=fun_args, cb=cb, **kwargs)
     return fit.uvars
