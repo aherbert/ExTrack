@@ -68,7 +68,11 @@ def compute_uncertainties(result, fcn, args=None, **kwargs):
     if not np.array_equal(x, xx):
         print(f"WARNING: computing uncertainties of non-optimal log likelihood function: {-optv} -> {-minv}")
         for i, name in enumerate(result.var_names):
-            print(f"  {name}={xx[i]}{' ***' if x[i] != xx[i] else ''}")
+            dx = xx[i] - x[i]
+            if dx:
+                print(f"  {name}={xx[i]} *** {dx}  ({(dx / x[i])})")
+            else:
+                print(f"  {name}={xx[i]}")
 
     if covar is not None:
         # Adapted from lmfit.minimizer.Minimizer._calculate_uncertainties_correlations
@@ -100,6 +104,7 @@ def compute_uncertainties(result, fcn, args=None, **kwargs):
 
 
 def _calculate_covariance_matrix(fun, x, step=1e-4, rel_step=False, num_steps=1,
+    richardson_terms=2,
     dd_method=0, order=8, maxiter=10, rtol=None, verbose=0, forward=False):
     """Calculate the covariance matrix.
 
@@ -112,7 +117,8 @@ def _calculate_covariance_matrix(fun, x, step=1e-4, rel_step=False, num_steps=1,
         x: Parameters.
         step: Step for the numerical differentiation.
         rel_step: Use relative step size.
-        num_steps: Number of steps for differentiation.
+        num_steps: Number of steps for differentiation (numdifftools).
+        richardson_terms: Number of terms used in the Richardson extrapolation (numdifftools).
         dd_method: 0: numdifftools; 1: scipy.differentiate.hessian.
         order: order of the finite difference formula to be used (scipy hessian).
         maxiter: maximum iterations (scipy hessian).
@@ -167,12 +173,13 @@ def _calculate_covariance_matrix(fun, x, step=1e-4, rel_step=False, num_steps=1,
         warnings.filterwarnings(action="ignore", module="scipy",
                                 message="^internal gelsd")
 
-        print(f"calculate_covariance_matrix: {x}. {step} rel={rel_step} num={num_steps} forward={forward}")
+        print(f"calculate_covariance_matrix: {x}. {step} rel={rel_step} num={num_steps} forward={forward} richardson_terms={richardson_terms}")
         if rel_step:
             step = step*x
         method = 'forward' if forward else 'central'
         Hfun = ndt.Hessian(fun,
           step=ndt.step_generators.MaxStepGenerator(base_step=step, num_steps=num_steps),
+          richardson_terms=richardson_terms,
           method=method)
         h = Hfun(x)
 
