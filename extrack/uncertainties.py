@@ -68,7 +68,7 @@ def compute_uncertainties(result, fcn, args=None, cb=None, **kwargs):
         for i, name in enumerate(result.var_names):
             dx = xx[i] - x[i]
             if dx:
-                print(f"  {name}={xx[i]} *** {dx}  ({(dx / x[i])})")
+                print(f"  {name}={xx[i]}  delta={dx}  ({(dx / x[i])})")
             else:
                 print(f"  {name}={xx[i]}")
         if cb is not None:
