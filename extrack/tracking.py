@@ -957,7 +957,7 @@ def extract_params(params, dt, nb_states, nb_substeps, input_LocErr = None, Matr
     if Matrix_type == 0:
         TrMat[np.arange(len(Ds)), np.arange(len(Ds))] = 1-np.sum(TrMat,1)
     if Matrix_type == 1: # 1 - exp(-)
-        TrMat = 1 - np.exp(-TrMat)
+        TrMat = -np.expm1(-TrMat)
         TrMat[np.arange(len(Ds)), np.arange(len(Ds))] = 1-np.sum(TrMat,1)
     elif Matrix_type == 2:
         TrMat[np.arange(len(Ds)), np.arange(len(Ds))] = -np.sum(TrMat,1)
@@ -1281,12 +1281,14 @@ def generate_params(nb_states = 3,
     if not (type(estimated_transition_rates) == np.ndarray or type(estimated_transition_rates) == list):
         estimated_transition_rates = [estimated_transition_rates] * (nb_states * (nb_states-1))
     idx = 0
+    # Original limit is 0.0001. Update to minimum normal 64-bit float.
+    min_p = 2**-1022
     for i in range(nb_states):
         for j in range(nb_states):
             if i != j:
-                param_kwargs.append({'name' : 'p'+ str(i) + str(j), 'value' : estimated_transition_rates[idx], 'min' : 0.0001, 'max' : 1, 'vary' : True})
+                param_kwargs.append({'name' : 'p'+ str(i) + str(j), 'value' : estimated_transition_rates[idx], 'min' : min_p, 'max' : 1, 'vary' : True})
                 idx += 1
-    param_kwargs.append({'name' : 'pBL', 'value' : 0.1, 'min' : 0.0001, 'max' : 1, 'vary' : True})
+    param_kwargs.append({'name' : 'pBL', 'value' : 0.1, 'min' : min_p, 'max' : 1, 'vary' : True})
 
     params = Parameters()
     [params.add(**param_kwargs[k]) for k in range(len(param_kwargs))]
