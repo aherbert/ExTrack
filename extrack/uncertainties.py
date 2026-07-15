@@ -110,7 +110,7 @@ def compute_uncertainties(result, fcn, args=None, cb=None, **kwargs):
             result.uvars = result.params.create_uvars(covar=result.covar)
 
 
-def _calculate_covariance_matrix(fun, x, step=1e-4, rel_step=False, num_steps=1,
+def _calculate_covariance_matrix(fun, x, step=1e-3, rel_step=True, num_steps=1,
     richardson_terms=2,
     dd_method=0, order=8, maxiter=10, rtol=None, verbose=0, forward=False):
     """Calculate the covariance matrix.
@@ -123,7 +123,7 @@ def _calculate_covariance_matrix(fun, x, step=1e-4, rel_step=False, num_steps=1,
         fun: Function accepting an array of parameters.
         x: Parameters.
         step: Step for the numerical differentiation.
-        rel_step: Use relative step size.
+        rel_step: Use relative step size. Not currently supported on scipy hessian.
         num_steps: Number of steps for differentiation (numdifftools).
         richardson_terms: Number of terms used in the Richardson extrapolation (numdifftools).
         dd_method: 0: numdifftools; 1: scipy.differentiate.hessian.
