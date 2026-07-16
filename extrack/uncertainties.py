@@ -4,7 +4,7 @@ This module adapts the parameter uncertainty estimation method used in lmfit
 for a non-linear least squares fit to a log-likelihood fit."""
 import warnings
 import numpy as np
-from scipy.linalg import LinAlgError, inv
+from scipy.linalg import LinAlgError, inv, eigvalsh
 from scipy.differentiate import hessian
 
 # check for numdifftools
@@ -193,7 +193,7 @@ def _calculate_covariance_matrix(fun, x, step=1e-3, rel_step=True, num_steps=1,
     try:
         cov_x = inv(h)
         if cov_x.diagonal().min() < 0:
-            print(f"bad covariance: {cov_x.diagonal()}")
+            print(f"bad covariance: {cov_x.diagonal()}. Hessian eigenvalues: {eigvalsh(h)}")
             # we know the calculated covariance is incorrect, so we set the covariance to None
             cov_x = None
     except (LinAlgError, ValueError) as e:
