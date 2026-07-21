@@ -61,6 +61,7 @@ def compute_uncertainties(result, fcn, args=None, cb=None, **kwargs):
 
     covar = _calculate_covariance_matrix(fun, x, **kwargs)
     result.covar = covar
+    result.residual = np.array([optv])
 
     # warn for non-optimal value
     if not np.array_equal(x, xx):

@@ -1443,6 +1443,7 @@ def param_vars(all_tracks,
 
     outputs:
     uvars: Uncertain variables (ufloat array), or None
+    ll: log-likelihood, or None
     '''
 
     if params == None:
@@ -1494,4 +1495,6 @@ def param_vars(all_tracks,
     fit.uvars = None
     kwargs['verbose'] = verbose
     compute_uncertainties(fit, cum_Proba_Cs, args=fun_args, cb=cb, **kwargs)
-    return fit.uvars
+    if fit.uvars:
+        return fit.uvars, -fit.residual[0]
+    return None, None
