@@ -1446,7 +1446,7 @@ def param_vars(all_tracks,
     ll: log-likelihood, or None
     '''
 
-    if params == None:
+    if params is None:
         params = generate_params(nb_states = nb_states,
                                LocErr_type = 1,
                                LocErr_bounds = [0.005, 0.1], # the initial guess on LocErr will be the geometric mean of the boundaries
@@ -1458,7 +1458,7 @@ def param_vars(all_tracks,
     l_list = np.sort(np.array(list(all_tracks.keys())).astype(int)).astype(str)
     sorted_tracks = []
     sorted_LocErrs = []
-    if type(dt) == dict:
+    if type(dt) is dict:
         sorted_dt = []
     for l in l_list:
         if len(all_tracks[l]) > 0 :
@@ -1472,10 +1472,10 @@ def param_vars(all_tracks,
     if len(all_tracks) < 1:
         raise ValueError('No track could be detected. The loaded tracks seem empty. Errors often come from wrong input paths.')
 
-    if input_LocErr != None:
+    if input_LocErr is not None:
         input_LocErr = sorted_LocErrs
 
-    if type(dt) == dict:
+    if type(dt) is dict:
         dt = sorted_dt
 
     print('cell_dims', cell_dims)
@@ -1495,6 +1495,6 @@ def param_vars(all_tracks,
     fit.uvars = None
     kwargs['verbose'] = verbose
     compute_uncertainties(fit, cum_Proba_Cs, args=fun_args, cb=cb, **kwargs)
-    if fit.uvars:
+    if fit.uvars is not None:
         return fit.uvars, -fit.residual[0]
     return None, None
